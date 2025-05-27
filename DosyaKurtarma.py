@@ -6,6 +6,7 @@ from datetime import datetime
 from binascii import hexlify
 import pytsk3
 import pyewf
+import tkinter.font as tkfont
 
 SUPPORTED_EXTENSIONS = [
     '.pdf', '.txt', '.jpg', '.jpeg', '.png', '.zip', '.rar', '.doc', '.docx',
@@ -16,50 +17,95 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Dosya Kurtarma Aracı")
-        self.geometry("1000x600")
+        self.geometry("1200x800")
+        self.configure(bg="#f0f0f0")
+        
         self.selected_drive = tk.StringVar()
         self.file_ext_filter = tk.StringVar()
         self.start_date = tk.StringVar()
         self.end_date = tk.StringVar()
         self.e01_path = ""
+        
+        self.style = ttk.Style()
+        self.style.configure("TFrame", background="#f0f0f0")
+        self.style.configure("TLabel", background="#f0f0f0", font=("Segoe UI", 10))
+        self.style.configure("TButton", padding=6, font=("Segoe UI", 10))
+        self.style.configure("Treeview", font=("Segoe UI", 10))
+        self.style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
+        
         self.create_widgets()
 
     def create_widgets(self):
-        frame = ttk.Frame(self)
-        frame.pack(pady=10)
+        main_frame = ttk.Frame(self)
+        main_frame.pack(padx=20, pady=20, fill="both", expand=True)
 
-        ttk.Label(frame, text="Sürücü:").grid(row=0, column=0)
+        # Sol panel - Kontrol alanı
+        control_frame = ttk.Frame(main_frame)
+        control_frame.pack(side="left", padx=(0, 20), fill="y")
+
+        # Sürücü seçimi
+        drive_frame = ttk.LabelFrame(control_frame, text="Sürücü Seçimi", padding=10)
+        drive_frame.pack(fill="x", pady=(0, 10))
+
         drives = [f"{d}:\\" for d in "CDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
-        self.drive_combo = ttk.Combobox(frame, textvariable=self.selected_drive, values=drives, state="readonly", width=10)
-        self.drive_combo.grid(row=0, column=1)
+        self.drive_combo = ttk.Combobox(drive_frame, textvariable=self.selected_drive, 
+                                      values=drives, state="readonly", width=15)
+        self.drive_combo.pack(side="left", padx=5)
         if drives:
             self.drive_combo.current(0)
 
-        ttk.Button(frame, text="E01 Seç", command=self.select_e01).grid(row=0, column=2, padx=5)
+        ttk.Button(drive_frame, text="E01 Seç", command=self.select_e01).pack(side="left", padx=5)
 
-        ttk.Label(frame, text="Filtre (örn: .pdf)").grid(row=1, column=0)
-        ttk.Entry(frame, textvariable=self.file_ext_filter, width=10).grid(row=1, column=1)
+        # Filtre alanı
+        filter_frame = ttk.LabelFrame(control_frame, text="Filtreleme", padding=10)
+        filter_frame.pack(fill="x", pady=10)
 
-        ttk.Label(frame, text="Tarih Başlangıç (YYYY-MM-DD):").grid(row=2, column=0)
-        ttk.Entry(frame, textvariable=self.start_date).grid(row=2, column=1)
+        ttk.Label(filter_frame, text="Uzantı:").grid(row=0, column=0, padx=5, pady=5)
+        ttk.Entry(filter_frame, textvariable=self.file_ext_filter, width=15).grid(row=0, column=1, padx=5, pady=5)
 
-        ttk.Label(frame, text="Tarih Bitiş (YYYY-MM-DD):").grid(row=3, column=0)
-        ttk.Entry(frame, textvariable=self.end_date).grid(row=3, column=1)
+        ttk.Label(filter_frame, text="Başlangıç:").grid(row=1, column=0, padx=5, pady=5)
+        ttk.Entry(filter_frame, textvariable=self.start_date, width=15).grid(row=1, column=1, padx=5, pady=5)
 
-        ttk.Button(self, text="Disk Tarama", command=self.scan_selected_disk).pack(pady=3)
-        ttk.Button(self, text="E01 Tarama", command=self.scan_e01).pack(pady=3)
-        ttk.Button(self, text="Geri Dönüşüm Kutusu", command=self.scan_recycle_bin).pack(pady=3)
+        ttk.Label(filter_frame, text="Bitiş:").grid(row=2, column=0, padx=5, pady=5)
+        ttk.Entry(filter_frame, textvariable=self.end_date, width=15).grid(row=2, column=1, padx=5, pady=5)
 
+        # Tarama butonları
+        scan_frame = ttk.LabelFrame(control_frame, text="Tarama İşlemleri", padding=10)
+        scan_frame.pack(fill="x", pady=10)
+
+        ttk.Button(scan_frame, text="Disk Tarama", command=self.scan_selected_disk).pack(fill="x", pady=2)
+        ttk.Button(scan_frame, text="E01 Tarama", command=self.scan_e01).pack(fill="x", pady=2)
+        ttk.Button(scan_frame, text="Geri Dönüşüm Kutusu", command=self.scan_recycle_bin).pack(fill="x", pady=2)
+
+        # Sağ panel - Sonuç alanı
+        result_frame = ttk.Frame(main_frame)
+        result_frame.pack(side="left", fill="both", expand=True)
+
+        # Treeview
         columns = ("Dosya Adı", "Uzantı", "Boyut (KB)", "SHA256", "Kaynak")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=15)
+        self.tree = ttk.Treeview(result_frame, columns=columns, show="headings", height=20)
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(result_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Treeview kolonları
         for col in columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=150)
-        self.tree.pack(pady=5)
+        
+        self.tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
-        ttk.Button(self, text="Seçili Dosyayı Önizle", command=self.preview_selected_file).pack(pady=5)
-        self.status = ttk.Label(self, text="Hazır", anchor="w")
-        self.status.pack(fill="x")
+        # Alt panel
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.pack(side="bottom", fill="x", pady=10)
+
+        ttk.Button(bottom_frame, text="Seçili Dosyayı Önizle", 
+                  command=self.preview_selected_file).pack(side="left", padx=5)
+        
+        self.status = ttk.Label(bottom_frame, text="Hazır", anchor="w")
+        self.status.pack(side="left", fill="x", expand=True, padx=5)
 
         self.file_data_map = {}
 
@@ -154,6 +200,7 @@ class App(tk.Tk):
         if not selected:
             messagebox.showwarning("Uyarı", "Lütfen bir dosya seçin.")
             return
+            
         name = self.tree.item(selected[0])["values"][0]
         data = self.file_data_map.get(name)
         if data is None:
@@ -161,21 +208,36 @@ class App(tk.Tk):
 
         win = tk.Toplevel(self)
         win.title("Önizleme")
+        win.geometry("800x600")
+        win.configure(bg="#f0f0f0")
+
         tabs = ttk.Notebook(win)
-        tabs.pack(expand=True, fill="both")
+        tabs.pack(expand=True, fill="both", padx=10, pady=10)
 
-        hex_view = tk.Text(tabs)
-        hex_view.insert("1.0", hexlify(data).decode())
-        tabs.add(hex_view, text="HEX")
-
-        text_view = tk.Text(tabs)
-        text_view.insert("1.0", data.decode("utf-8", errors="replace"))
-        tabs.add(text_view, text="TEXT")
-
-        bin_view = tk.Text(tabs)
-        bin_data = ' '.join(f"{byte:08b}" for byte in data[:2048])
-        bin_view.insert("1.0", bin_data)
-        tabs.add(bin_view, text="BINARY")
+        for view_type, title in [("HEX", "Hexadecimal Görünüm"), 
+                               ("TEXT", "Metin Görünüm"), 
+                               ("BINARY", "Binary Görünüm")]:
+            frame = ttk.Frame(tabs, padding=10)
+            text_widget = tk.Text(frame, wrap="none", font=("Consolas", 10))
+            
+            scrollbar_y = ttk.Scrollbar(frame, orient="vertical", command=text_widget.yview)
+            scrollbar_x = ttk.Scrollbar(frame, orient="horizontal", command=text_widget.xview)
+            text_widget.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+            
+            if view_type == "HEX":
+                text_widget.insert("1.0", hexlify(data).decode())
+            elif view_type == "TEXT":
+                text_widget.insert("1.0", data.decode("utf-8", errors="replace"))
+            else:
+                text_widget.insert("1.0", ' '.join(f"{byte:08b}" for byte in data[:2048]))
+            
+            text_widget.grid(row=0, column=0, sticky="nsew")
+            scrollbar_y.grid(row=0, column=1, sticky="ns")
+            scrollbar_x.grid(row=1, column=0, sticky="ew")
+            
+            frame.grid_columnconfigure(0, weight=1)
+            frame.grid_rowconfigure(0, weight=1)
+            tabs.add(frame, text=title)
 
     def scan_selected_disk(self):
         try:
